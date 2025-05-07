@@ -41,8 +41,10 @@ impl Screen {
             .unwrap();
 
         canvas.clear();
-        canvas.present();
-
         let _ = sdl_context.event_pump();
+
+        loop {
+            canvas.present();
+        }
     }
 }
