@@ -7,26 +7,40 @@ use sdl2::video::{Window, WindowContext};
 
 pub struct Screen {
     framebuf: [[bool; 32]; 64],
-}
-
-impl Default for Screen {
-    fn default() -> Self {
-        Self {
-            framebuf: [[false; 32]; 64],
-        }
-    }
+    context: sdl2::Sdl,
+    canvas: Canvas<Window>,
+    event_pump: sdl2::EventPump,
 }
 
 impl Screen {
+    pub fn new(name: &str, width: u32, height: u32) -> Self {
+        let context = sdl2::init().unwrap();
+        let canvas = Self::start_window(&context, name, width, height);
+        let event_pump = context.event_pump().unwrap();
+
+        Self {
+            framebuf: [[false; 32]; 64],
+            context,
+            canvas,
+            event_pump,
+        }
+    }
+
     pub fn toggle_pixel(&mut self, x: usize, y: usize) {
         self.framebuf[x][y] ^= self.framebuf[x][y];
     }
 
-    pub fn start_window(&mut self, name: &str, width: u32, height: u32) {
-        let sdl_context = sdl2::init().unwrap();
-        let video_subsystem = sdl_context.video();
+    pub fn get_canvas(&mut self) -> &mut Canvas<Window> {
+        &mut self.canvas
+    }
+
+    pub fn get_event_pump(&mut self) -> &mut sdl2::EventPump {
+        &mut self.event_pump
+    }
+
+    fn start_window(context: &sdl2::Sdl, name: &str, width: u32, height: u32) -> Canvas<Window> {
+        let video_subsystem = context.video().unwrap();
         let window = video_subsystem
-            .unwrap()
             .window(name, width, height)
             .position_centered()
             .build()
@@ -41,10 +55,8 @@ impl Screen {
             .unwrap();
 
         canvas.clear();
-        let _ = sdl_context.event_pump();
+        let _ = context.event_pump();
 
-        loop {
-            canvas.present();
-        }
+        canvas
     }
 }
