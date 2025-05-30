@@ -1,8 +1,9 @@
 use super::cpu::Cpu;
 use super::memory::Memory;
 use super::screen::Screen;
-use std:: time;
+use super::keypad::Keypad;
 use sdl2::{event::Event, keyboard::Keycode};
+use std::time;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -16,12 +17,12 @@ pub struct Emu {
 
 impl Emu {
     pub fn new() -> Self {
-        let mut memory = Memory::new();
-        let mut screen = Screen::new("chip8 emu", 18, 18);
+        let memory = Memory::new();
+        let screen = Screen::new("chip8 emu", 18, 18);
 
         Self {
             memory,
-            screen, 
+            screen,
             cpu: Cpu::new(),
         }
     }
@@ -38,21 +39,13 @@ impl Emu {
         while open {
             if running && last_tick_time.elapsed().as_millis() > (1000.0 / 700.0) as u128 {
                 running = self.cpu.tick(&mut self.memory, &mut self.screen);
-                last_tick_time = time::Instant::now(); 
+                last_tick_time = time::Instant::now();
             }
 
-            for event in self.screen.get_event_pump().poll_iter() {
-                match event {
-                    Event::Quit { .. } | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                        open = false;
-                        break;
-                    }
-                    _ => {}
-                }
-            }
+            open = self.screen.handle_input();
         }
     }
-    
+
     fn store_font(&mut self) {
         let font: [u8; 5 * 16] = [
             0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -70,14 +63,14 @@ impl Emu {
             0xF0, 0x80, 0x80, 0x80, 0xF0, // C
             0xE0, 0x90, 0x90, 0x90, 0xE0, // D
             0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-            0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+            0xF0, 0x80, 0xF0, 0x80, 0x80, // F
         ];
 
         for (i, addr) in (0x050u16..=0x09F).enumerate() {
             self.memory.store(addr, font[i]);
         }
     }
-    
+
     fn store_game(&mut self, game_file: &str) {
         let path = Path::new(game_file);
         let mut file = match File::open(path) {
@@ -85,7 +78,7 @@ impl Emu {
             Ok(file) => file,
         };
 
-        let mut buf= [0; 1];
+        let mut buf = [0; 1];
         let mut pc: u16 = 0x200;
         loop {
             let size = match file.read(&mut buf) {

@@ -4,7 +4,7 @@ use rand::Rng;
 pub struct Cpu {
     pc: u16,
     i: u16,
-    stack: CallStack, 
+    stack: CallStack,
     delay_tim: u8,
     sound_tim: u8,
     regs: [u8; 16],
@@ -12,20 +12,20 @@ pub struct Cpu {
 
 struct CallStack {
     stack: [u16; 10],
-    idx: u8, 
+    idx: u8,
 }
 
 impl CallStack {
     fn new() -> Self {
         Self {
             stack: [0; 10],
-            idx: 0
+            idx: 0,
         }
     }
 
     fn push(&mut self, addr: u16) {
         self.stack[self.idx as usize] = addr;
-        self.idx += 1; 
+        self.idx += 1;
     }
 
     fn pop(&mut self) -> u16 {
@@ -92,11 +92,11 @@ impl Cpu {
                 3 => self.xor(x, y),
                 4 => self.add(x, y),
                 5 => self.sub_a(x, y),
-                6 => self.shift_right(x), 
+                6 => self.shift_right(x),
                 7 => self.sub_b(x, y),
                 0xE => self.shift_left(x),
                 _ => {}
-            }
+            },
             0x9 => match n {
                 0x0 => self.skip_ne(x, y),
                 _ => {}
@@ -141,7 +141,7 @@ impl Cpu {
         // Draw an n pixel tall sprite from memory location that the I register is holding
         // at horizontal coordinate in x register and vertical coordinate in y register
         // If any pixels were turned off, set VF flag to 1. Otherwise, it is set to 0.
-        
+
         let x = self.regs[x as usize] % 64;
         let y = self.regs[y as usize] % 32;
 
@@ -163,7 +163,7 @@ impl Cpu {
                 }
             }
         }
-        
+
         self.regs[0xF] = match pixel_off_flag {
             true => 1,
             false => 0,
@@ -212,7 +212,7 @@ impl Cpu {
     fn xor(&mut self, x: u8, y: u8) {
         self.regs[x as usize] ^= self.regs[y as usize];
     }
-    
+
     fn add(&mut self, x: u8, y: u8) {
         let res: u16 = self.regs[x as usize] as u16 + self.regs[y as usize] as u16;
         self.regs[0xF] = match res > 255 {
@@ -220,7 +220,7 @@ impl Cpu {
             false => 0,
         };
 
-        self.regs[x as usize] = res as u8; 
+        self.regs[x as usize] = res as u8;
     }
 
     fn sub_a(&mut self, x: u8, y: u8) {
@@ -248,7 +248,7 @@ impl Cpu {
     fn shift_left(&mut self, x: u8) {
         self.regs[0xF] = match x & 0x80 == 0x80 {
             true => 1,
-            false => 0, 
+            false => 0,
         };
 
         self.regs[x as usize] <<= 1;
@@ -257,7 +257,7 @@ impl Cpu {
     fn shift_right(&mut self, x: u8) {
         self.regs[0xF] = match x & 0x1 == 0x1 {
             true => 1,
-            false => 0, 
+            false => 0,
         };
 
         self.regs[x as usize] >>= 1;

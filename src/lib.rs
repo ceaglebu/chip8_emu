@@ -1,7 +1,8 @@
-pub mod screen;
 pub mod cpu;
-pub mod memory;
 pub mod emu;
+pub mod keypad;
+pub mod memory;
+pub mod screen;
 
 #[cfg(test)]
 mod tests {
