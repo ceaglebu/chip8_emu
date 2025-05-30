@@ -1,4 +1,5 @@
 use crate::{memory::Memory, screen::Screen};
+use rand::Rng;
 
 pub struct Cpu {
     pc: u16,
@@ -69,29 +70,41 @@ impl Cpu {
         let nnn = (instr & 0x0FFF) as u16;
 
         match first_nibble {
-            0x0 => {
-                match nnn {
-                    0x0E0 => self.clear_screen(screen),
-                    0x0EE => self.ret(),
-                    _ => {}
-                }
+            0x0 => match nnn {
+                0x0E0 => self.clear_screen(screen),
+                0x0EE => self.ret(),
+                _ => {}
             },
-            0x1 => {
-                self.jump(nnn);
+            0x1 => self.jump(nnn),
+            0x2 => self.call(nnn),
+            0x3 => self.skip_e_imm(x, nn),
+            0x4 => self.skip_ne_imm(x, nn),
+            0x5 => match n {
+                0x0 => self.skip_e(x, y),
+                _ => {}
             },
-            0x6 => {
-                self.set(x, nn);
+            0x6 => self.set_imm(x, nn),
+            0x7 => self.add_imm(x, nn),
+            0x8 => match n {
+                0 => self.set(x, y),
+                1 => self.or(x, y),
+                2 => self.and(x, y),
+                3 => self.xor(x, y),
+                4 => self.add(x, y),
+                5 => self.sub_a(x, y),
+                6 => self.shift_right(x), 
+                7 => self.sub_b(x, y),
+                0xE => self.shift_left(x),
+                _ => {}
             }
-            0x7 => {
-                self.add_imm(x, nn);
-            }
-            0xA => {
-                self.set_index(nnn);
-            }
-            0xD => {
-                self.display(x, y, n, memory, screen);
-            }
-            
+            0x9 => match n {
+                0x0 => self.skip_ne(x, y),
+                _ => {}
+            },
+            0xA => self.set_index(nnn),
+            0xB => self.jump_offset(nnn),
+            0xC => self.random(x, nn),
+            0xD => self.display(x, y, n, memory, screen),
             _ => {}
         }
     }
@@ -108,12 +121,16 @@ impl Cpu {
         self.pc = addr;
     }
 
-    fn set(&mut self, reg_idx: u8, value: u8) {
+    fn set_imm(&mut self, reg_idx: u8, value: u8) {
         self.regs[reg_idx as usize] = value;
     }
 
+    fn set(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] = self.regs[y as usize];
+    }
+
     fn add_imm(&mut self, reg_idx: u8, imm: u8) {
-        self.regs[reg_idx as usize] += imm;
+        self.regs[reg_idx as usize] = u8::wrapping_add(self.regs[reg_idx as usize], imm);
     }
 
     fn set_index(&mut self, addr: u16) {
@@ -146,12 +163,113 @@ impl Cpu {
                 }
             }
         }
+        
+        self.regs[0xF] = match pixel_off_flag {
+            true => 1,
+            false => 0,
+        };
 
-        if pixel_off_flag {
-            self.regs[0xF] = 1;
-        } else {
-            self.regs[0xF] = 0;
-        }
         screen.update();
+    }
+
+    fn call(&mut self, fn_addr: u16) {
+        self.stack.push(self.pc);
+        self.pc = fn_addr;
+    }
+
+    fn skip_e_imm(&mut self, x: u8, nn: u8) {
+        if self.regs[x as usize] == nn {
+            self.pc += 2;
+        }
+    }
+
+    fn skip_ne_imm(&mut self, x: u8, nn: u8) {
+        if self.regs[x as usize] != nn {
+            self.pc += 2;
+        }
+    }
+
+    fn skip_e(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] == self.regs[y as usize] {
+            self.pc += 2;
+        }
+    }
+
+    fn skip_ne(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] != self.regs[y as usize] {
+            self.pc += 2;
+        }
+    }
+
+    fn or(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] |= self.regs[y as usize];
+    }
+
+    fn and(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] &= self.regs[y as usize];
+    }
+
+    fn xor(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] ^= self.regs[y as usize];
+    }
+    
+    fn add(&mut self, x: u8, y: u8) {
+        let res: u16 = self.regs[x as usize] as u16 + self.regs[y as usize] as u16;
+        self.regs[0xF] = match res > 255 {
+            true => 1,
+            false => 0,
+        };
+
+        self.regs[x as usize] = res as u8; 
+    }
+
+    fn sub_a(&mut self, x: u8, y: u8) {
+        let reg_idx = x;
+        let (x, y) = (self.regs[x as usize], self.regs[y as usize]);
+        self.regs[0xF] = match x > y {
+            true => 1,
+            false => 0,
+        };
+
+        self.regs[reg_idx as usize] = u8::wrapping_sub(x, y);
+    }
+
+    fn sub_b(&mut self, x: u8, y: u8) {
+        let reg_idx = x;
+        let (x, y) = (self.regs[x as usize], self.regs[y as usize]);
+        self.regs[0xF] = match y > x {
+            true => 1,
+            false => 0,
+        };
+
+        self.regs[reg_idx as usize] = u8::wrapping_sub(y, x);
+    }
+
+    fn shift_left(&mut self, x: u8) {
+        self.regs[0xF] = match x & 0x80 == 0x80 {
+            true => 1,
+            false => 0, 
+        };
+
+        self.regs[x as usize] <<= 1;
+    }
+
+    fn shift_right(&mut self, x: u8) {
+        self.regs[0xF] = match x & 0x1 == 0x1 {
+            true => 1,
+            false => 0, 
+        };
+
+        self.regs[x as usize] >>= 1;
+    }
+
+    fn jump_offset(&mut self, nnn: u16) {
+        self.jump(nnn + self.regs[0] as u16);
+    }
+
+    fn random(&mut self, x: u8, nn: u8) {
+        let mut rng = rand::rng();
+
+        self.regs[x as usize] = rng.random::<u8>() & nn;
     }
 }
