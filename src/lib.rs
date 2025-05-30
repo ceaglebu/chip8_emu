@@ -8,8 +8,6 @@ pub mod screen;
 mod tests {
     use super::*;
 
-    use screen::Screen;
-
     #[test]
     fn screen() {
         // let mut screen: Screen = Default::default();

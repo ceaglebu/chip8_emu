@@ -1,8 +1,6 @@
 use super::cpu::Cpu;
 use super::memory::Memory;
 use super::screen::Screen;
-use super::keypad::Keypad;
-use sdl2::{event::Event, keyboard::Keycode};
 use std::time;
 
 use std::fs::File;
@@ -35,11 +33,17 @@ impl Emu {
         let mut running: bool = true;
 
         let mut last_tick_time = time::Instant::now();
+        let mut last_timer_time = time::Instant::now();
 
         while open {
-            if running && last_tick_time.elapsed().as_millis() > (1000.0 / 700.0) as u128 {
+            if running && last_tick_time.elapsed().as_micros() > (1000000.0 / 700.0) as u128 {
                 running = self.cpu.tick(&mut self.memory, &mut self.screen);
                 last_tick_time = time::Instant::now();
+            }
+
+            if running && last_timer_time.elapsed().as_micros() > (1000000.0 / 60.0) as u128 {
+                self.cpu.decrement_timers();
+                last_timer_time = time::Instant::now();
             }
 
             open = self.screen.handle_input();

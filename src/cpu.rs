@@ -55,6 +55,15 @@ impl Cpu {
         self.pc < 4096
     }
 
+    pub fn decrement_timers(&mut self) {
+        if self.delay_tim > 0 {
+            self.delay_tim -= 1;
+        }
+        if self.sound_tim > 0 {
+            self.sound_tim -= 1;
+        }
+    }
+
     fn fetch(&mut self, memory: &Memory) -> u16 {
         let instr = ((memory.load(self.pc) as u16) << 8) | (memory.load(self.pc + 1) as u16);
         self.pc += 2;
@@ -105,6 +114,23 @@ impl Cpu {
             0xB => self.jump_offset(nnn),
             0xC => self.random(x, nn),
             0xD => self.display(x, y, n, memory, screen),
+            0xE => match nn {
+                0x9E => self.skip_if_key_state(x, true, screen),
+                0xA1 => self.skip_if_key_state(x, false, screen),
+                _ => {}
+            },
+            0xF => match nn {
+                0x07 => self.get_delay_tim(x),
+                0x0A => self.get_key(x, screen),
+                0x15 => self.set_delay_tim(x),
+                0x18 => self.set_sound_tim(x),
+                0x1E => self.add_to_index(x),
+                0x29 => self.font_character(x),
+                0x33 => self.bcd_conversion(x, memory),
+                0x55 => self.store_memory(x, memory),
+                0x65 => self.load_memory(x, memory),
+                _ => {}
+            }
             _ => {}
         }
     }
@@ -148,7 +174,7 @@ impl Cpu {
         let mut pixel_off_flag = false;
 
         for row in 0..n {
-            if y + row > 32 {
+            if y + row > 31 {
                 break;
             }
 
@@ -246,7 +272,7 @@ impl Cpu {
     }
 
     fn shift_left(&mut self, x: u8) {
-        self.regs[0xF] = match x & 0x80 == 0x80 {
+        self.regs[0xF] = match (self.regs[x as usize] & 0x80) == 0x80 {
             true => 1,
             false => 0,
         };
@@ -255,7 +281,7 @@ impl Cpu {
     }
 
     fn shift_right(&mut self, x: u8) {
-        self.regs[0xF] = match x & 0x1 == 0x1 {
+        self.regs[0xF] = match (self.regs[x as usize] & 0x1) == 0x1 {
             true => 1,
             false => 0,
         };
@@ -271,5 +297,69 @@ impl Cpu {
         let mut rng = rand::rng();
 
         self.regs[x as usize] = rng.random::<u8>() & nn;
+    }
+
+    fn skip_if_key_state(&mut self, x: u8, if_state: bool, screen: &mut Screen) {
+        if screen.get_keypad().is_pressed_idx(self.regs[x as usize]) == if_state {
+            self.pc += 2;
+        }
+    }
+
+    fn get_delay_tim(&mut self, x: u8) {
+        self.regs[x as usize] = self.delay_tim;
+    }
+
+    fn set_delay_tim(&mut self, x: u8) {
+        self.delay_tim = self.regs[x as usize];
+    }
+
+    fn set_sound_tim(&mut self, x: u8) {
+        self.sound_tim = self.regs[x as usize];
+    }
+
+    fn add_to_index(&mut self, x: u8) {
+        self.i += self.regs[x as usize] as u16;
+        self.regs[0xF] = match self.i > 0xFFF {
+            true => 1,
+            false => 0,
+        };
+    }
+
+    fn get_key(&mut self, x: u8, screen: &mut Screen) {
+        for idx in 0..16 {
+            if screen.get_keypad().is_pressed_idx(idx) {
+                self.regs[x as usize] = idx;
+                return;
+            }
+        }
+
+        self.pc -= 2;
+    }
+
+    fn font_character(&mut self, x: u8) {
+        let ch = self.regs[x as usize] & 0xF;
+        self.i = 0x50 + ch as u16 * 5;
+    }
+
+    fn bcd_conversion(&mut self, x: u8, memory: &mut Memory) {
+        let x = self.regs[x as usize];
+        let hundreds = x / 100;
+        let tens = (x % 100) / 10;
+        let ones = x % 10;
+        memory.store(self.i, hundreds);
+        memory.store(self.i + 1, tens);
+        memory.store(self.i + 2, ones);
+    }
+
+    fn store_memory(&mut self, x: u8, memory: &mut Memory) {
+        for reg in 0..=x {
+            memory.store(self.i + reg as u16, self.regs[reg as usize]);
+        }
+    }
+
+    fn load_memory(&mut self, x: u8, memory: &mut Memory) {
+        for reg in 0..=x {
+            self.regs[reg as usize] = memory.load(self.i + reg as u16);
+        }
     }
 }

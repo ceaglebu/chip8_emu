@@ -13,8 +13,12 @@ impl Keypad {
         self.pressed[button_code as usize] = pressed;
     }
 
-    pub fn is_pressed(&mut self, button_code: ButtonCode) -> bool {
+    pub fn is_pressed_code(&self, button_code: ButtonCode) -> bool {
         self.pressed[button_code as usize]
+    }
+
+    pub fn is_pressed_idx(&self, idx: u8) -> bool {
+        self.pressed[idx as usize]
     }
 }
 #[derive(Debug)]
